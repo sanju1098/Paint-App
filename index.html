@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <!-- <link rel="stylesheet" href="style.css"/>
+        <script type="text/javascript" src="script.js"></script> -->
+        <title>Sample Paint | CanvasJS</title>
+    </head>
+
+    <body>
+
+        <style>
+                .header {
+                    font-family:Cursive;
+                    text-align: center;
+                }
+
+                .main-content{
+                    margin: auto;
+                    width: 60%;
+                    padding: 0.625rem;
+                }
+
+                button {
+                    position:absolute;
+                    left:85rem;
+                    top: 40rem;;
+                    background-color: #0eb2db;
+                    color: black;
+                    padding: 0.75rem 1.5rem;
+                    text-align: center;
+                    font-size: 1rem;
+                    cursor: pointer;
+                    
+                }
+
+                button:hover {
+                    background-color: #54fc86
+                }
+
+                #clearbtn{
+                    font-family:Cursive;
+                    text-align: center;
+                }
+
+                canvas {
+                    background-color: whitesmoke;
+                    border: 0.00625rem solid #000000;
+                    border-radius: 0.625rem;
+                    cursor: pointer;
+                }
+        </style>
+
+        <script>
+            window.onload = function () {
+            /* Resource https://developer.mozilla.org/en-US/  for Web API Element*/
+            var canvas = document.getElementById("myCanvas");
+            var clearbtn = document.getElementById("clearbtn");
+            var isActive = false;
+            var startCoordinates = null;
+            var endCoordinates = null;
+            var context = canvas.getContext("2d");
+            var dataPool = [];
+            var flag = false;
+            var draggedTriIndex = 0;
+            var randomRGB = null;
+            var changeDistance = {
+                x: 0,
+                y: 0
+            };
+
+            //dblclick fires after two click events
+            canvas.addEventListener('dblclick', function (e) {
+                var pos = getMousePositions(canvas, e);
+                dataPool.forEach(function (value) {
+                    var Area = findArea(value[0][0], value[0][1], value[1][0], value[1][1], value[2][0], value[2][1]);
+                    var Area1 = findArea(value[0][0], value[0][1], pos.x, pos.y, value[2][0], value[2][1]);
+                    var Area2 = findArea(value[0][0], value[0][1], value[1][0], value[1][1], pos.x, pos.y);
+                    var Area3 = findArea(pos.x, pos.y, value[1][0], value[1][1], value[2][0], value[2][1]);
+                    if (Math.round(Area) === Math.round(Area1 + Area2 + Area3)) {
+                        var newList = [];
+                        var item = dataPool[dataPool.indexOf(value)];
+                        dataPool.forEach(function (value2) {
+                            if (value2 !== item) {
+                                newList.push(value2);
+                            }
+                        });
+                        dataPool = newList;
+                        clearCanvas();
+                        dataPool.forEach(function (value2) {
+                            reDrawTriangles(value2[0][0], value2[0][1], value2[4], value2[3]);
+                        });
+                        return true;
+                    }
+                });
+                isActive = false;
+
+            });
+
+            //Function MouseMove & MouseUp
+            //The mousemove event is fired at an element when a pointing device (usually a mouse) is moved while the cursor's hotspot is inside it.
+            canvas.addEventListener('mousemove', function (e) {
+
+                endCoordinates = getMousePositions(canvas, e);
+                if (isActive && flag) {
+                    clearCanvas();
+                    canvas.style.cursor = 'pointer';
+                    reDrawTriangles(startCoordinates.x, startCoordinates.y, calculateLineDistance(startCoordinates.x, startCoordinates.y, endCoordinates.x, endCoordinates.y), randomRGB);
+                    dataPool.forEach(function (value) {
+                        reDrawTriangles(value[0][0], value[0][1], value[4], value[3]);
+                    });
+                } else if (isActive) {
+                    canvas.style.cursor = 'pointer';
+                    clearCanvas();
+                    var item = dataPool[draggedTriIndex];
+                    var difX = endCoordinates.x - item[0][0] + changeDistance.x;
+                    var difY = endCoordinates.y - item[0][1] + changeDistance.y;
+                    item[0][0] += difX;
+                    item[0][1] += difY;
+                    item[1][0] += difX;
+                    item[1][1] += difY;
+                    item[2][0] += difX;
+                    item[2][1] += difY;
+                    reDrawTriangles(item[0][0], item[0][1], item[4], item[3]);
+                    dataPool.forEach(function (value) {
+                        if (value[0][0] !== startCoordinates.x && value[0][1] !== startCoordinates.y) {
+                            reDrawTriangles(value[0][0], value[0][1], value[4], value[3]);
+                        }
+                    });
+                }
+
+            }, true);
+            canvas.addEventListener('mouseup', function (e) {
+                canvas.style.cursor = 'pointer';
+                var mousePos = getMousePositions(canvas, e);
+                if (!flag) {
+                    isActive = false;
+                    flag = false;
+                    doDragTranslation(mousePos.x, mousePos.y);
+                } else if (isActive && calculateLineDistance(startCoordinates.x, startCoordinates.y, endCoordinates.x, endCoordinates.y) > 2) {
+                    isActive = false;
+                    flag = false;
+                    endCoordinates = mousePos;
+                    drawTriangle(1, startCoordinates.x, startCoordinates.y, endCoordinates.x, endCoordinates.y);
+                }
+            });
+
+            //The mousedown event is fired at an Element when a pointing device button is pressed while the pointer is inside the element.
+            canvas.addEventListener('mousedown', function (e) {
+                canvas.style.cursor = 'pointer';
+                e.preventDefault();
+                var mousePos = getMousePositions(canvas, e);
+                startCoordinates = mousePos;
+                endCoordinates = mousePos;
+                isActive = true;
+                flag = checkIfInside(mousePos);
+                startCoordinates = mousePos;
+                endCoordinates = mousePos;
+                randomRGB = getRandomColor();
+                if (dataPool.length > 0) {
+                    changeDistance.x = dataPool[draggedTriIndex][0][0] - mousePos.x;
+                    changeDistance.y = dataPool[draggedTriIndex][0][1] - mousePos.y
+                }
+                console.log(changeDistance);
+            });
+
+            //checkIfInside function to check the mouse is inside the given triangle or no:
+            function checkIfInside(pos) {
+                flag = true;
+                dataPool.forEach(function (value) {
+                    var Area = findArea(value[0][0], value[0][1], value[1][0], value[1][1], value[2][0], value[2][1]);
+                    var Area1 = findArea(value[0][0], value[0][1], pos.x, pos.y, value[2][0], value[2][1]);
+                    var Area2 = findArea(value[0][0], value[0][1], value[1][0], value[1][1], pos.x, pos.y);
+                    var Area3 = findArea(pos.x, pos.y, value[1][0], value[1][1], value[2][0], value[2][1]);
+                    if (Math.round(Area) === Math.round(Area1 + Area2 + Area3)) {
+                        draggedTriIndex = dataPool.indexOf(value);
+                        flag = false;
+                        return true;
+                    }
+                });
+                return flag;
+            }
+
+            function findArea(x1, y1, x2, y2, x3, y3) {
+                return Math.abs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0);
+            }
+
+            function doDragTranslation(newx, newy) {
+                var item = dataPool[draggedTriIndex];
+                var difX = newx - item[0][0] + changeDistance.x;
+                var difY = newy - item[0][1] + changeDistance.y;
+                item[0][0] += difX;
+                item[0][1] += difY;
+                item[1][0] += difX;
+                item[1][1] += difY;
+                item[2][0] += difX;
+                item[2][1] += difY;
+                dataPool.splice(draggedTriIndex, 0, item);
+                clearCanvas();
+                dataPool.forEach(function (value) {
+                    reDrawTriangles(value[0][0], value[0][1], value[4], value[3]);
+                });
+            }
+
+            function getMousePositions(canvas, event) {
+                var bounds = canvas.getBoundingClientRect();
+                return {
+                    x: event.clientX - bounds.left,
+                    y: event.clientY - bounds.top
+                };
+            }
+
+            function calculateLineDistance(x1, y1, x2, y2) {
+                return Math.round(Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2)));
+            }
+
+            function clearCanvas() {
+                context.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            //Main Content for the Triangles
+
+            function drawTriangle(mode, x1, y1, x2, y2) {
+                var distance = calculateLineDistance(x1, y1, x2, y2); //For Finding the Distance
+                var height = 1.414 * (distance) * mode; //Triangle Heght
+                context.beginPath();
+                context.moveTo(x1, y1);
+                context.lineTo(x1 + distance / 2, y1 + height);
+                context.lineTo(x1 - distance / 2, y1 + height);
+                context.moveTo(x1, y1);
+                context.fillStyle = randomRGB;
+                context.fill();
+                context.stroke();
+                dataPool.push([[x1, y1], [x1 + distance / 2, y1 + height * 1.25], [x1 - distance / 2, y1 + height * 1.25], [context.fillStyle], [distance]]);
+            }
+
+
+            function reDrawTriangles(x1, y1, distance, color) {
+                var height = 1.414 * (distance); //Triangle Height
+                context.beginPath();
+                context.moveTo(x1, y1);
+                context.lineTo(x1 + distance / 2, y1 + height);
+                context.lineTo(x1 - distance / 2, y1 + height);
+                context.moveTo(x1, y1);
+                context.fillStyle = color;
+                context.fill();
+                context.stroke();
+            }
+
+            //Generating the color automatically
+            function getRandomColor() {
+                var r = Math.ceil(Math.random() * 256);
+                var g = Math.ceil(Math.random() * 256);
+                var b = Math.ceil(Math.random() * 256);
+                return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+            }
+
+            //Clear Button:
+            clearbtn.addEventListener('click', function () {
+                dataPool = [];
+                clearCanvas();
+            });
+
+            };
+        </script>
+        <h1 class="header">Simple Paint App</h1>
+        <div class="main-content">
+            <canvas id="myCanvas" width="1000" height="600"></canvas>
+                <button type="button">
+                    <div id="clearbtn">CLEAR</div>
+                </button>
+        </div>
+    </body>
+</html>
